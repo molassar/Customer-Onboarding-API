@@ -1,0 +1,519 @@
+{
+  "info": {
+    "_postman_id": "f03deeb6-579d-45d8-a8fc-dc7fe4d58552",
+    "name": "Customer Onboarding API",
+    "description": "Run the collection in order. The happy path stores the generated password and bearer token in collection variables. Requests that access the database wait for a fresh rate-limit window; the final scenario deliberately sends a burst and expects HTTP 429.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "username",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "underageDateOfBirth",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Happy path",
+      "item": [
+        {
+          "name": "Register customer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('username', `postman.${Date.now()}`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Customer is registered', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Generated credentials are returned', function () {",
+                  "  pm.expect(response.username).to.eql(pm.collectionVariables.get('username'));",
+                  "  pm.expect(response.password).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set('password', response.password);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"fullName\": \"Postman Customer\",\n  \"dateOfBirth\": \"1990-05-10\",\n  \"address\": {\n    \"countryCode\": \"NL\",\n    \"street\": \"Keizersgracht\",\n    \"houseNumber\": \"123A\",\n    \"postalCode\": \"1015 CJ\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/register"
+          }
+        },
+        {
+          "name": "Login with generated password",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(function () {}, 1100);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login succeeds', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('Access token and expiration are returned', function () {",
+                  "  pm.expect(response.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(new Date(response.expiresAt).getTime()).to.be.above(Date.now());",
+                  "});",
+                  "pm.collectionVariables.set('accessToken', response.accessToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Get authenticated account overview",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(function () {}, 1100);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Overview is returned', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "pm.test('New account has the expected defaults', function () {",
+                  "  pm.expect(response.accountNumber).to.match(/^NL\\d{2}BANK\\d{10}$/);",
+                  "  pm.expect(response.accountType).to.eql('PRIVATE');",
+                  "  pm.expect(response.balance).to.eql(0);",
+                  "  pm.expect(response.currency).to.eql('EUR');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/overview"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Registration failures",
+      "item": [
+        {
+          "name": "Reject duplicate username",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(function () {}, 1100);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Duplicate username returns conflict', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().title).to.eql('Username already exists');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"fullName\": \"Duplicate Customer\",\n  \"dateOfBirth\": \"1990-05-10\",\n  \"address\": {\n    \"countryCode\": \"NL\",\n    \"street\": \"Prinsengracht\",\n    \"houseNumber\": \"42\",\n    \"postalCode\": \"1015 DV\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/register"
+          }
+        },
+        {
+          "name": "Reject underage customer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const birthday = new Date();",
+                  "birthday.setUTCFullYear(birthday.getUTCFullYear() - 18);",
+                  "birthday.setUTCDate(birthday.getUTCDate() + 1);",
+                  "pm.collectionVariables.set('underageDateOfBirth', birthday.toISOString().slice(0, 10));"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Underage registration is rejected', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().title).to.eql('Customer is underage');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"underage.{{$timestamp}}\",\n  \"fullName\": \"Underage Customer\",\n  \"dateOfBirth\": \"{{underageDateOfBirth}}\",\n  \"address\": {\n    \"countryCode\": \"NL\",\n    \"street\": \"Keizersgracht\",\n    \"houseNumber\": \"10\",\n    \"postalCode\": \"1015 CJ\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/register"
+          }
+        },
+        {
+          "name": "Reject unsupported country",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unsupported country is rejected', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().title).to.eql('Unsupported country');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"german.{{$timestamp}}\",\n  \"fullName\": \"German Customer\",\n  \"dateOfBirth\": \"1990-05-10\",\n  \"address\": {\n    \"countryCode\": \"DE\",\n    \"street\": \"Hauptstrasse\",\n    \"houseNumber\": \"10\",\n    \"postalCode\": \"10115\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/register"
+          }
+        },
+        {
+          "name": "Reject invalid request fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Validation errors are returned', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  const response = pm.response.json();",
+                  "  pm.expect(response.title).to.eql('Validation failed');",
+                  "  pm.expect(response.errors).to.have.property('username');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"   \",\n  \"fullName\": \"Invalid Customer\",\n  \"dateOfBirth\": \"1990-05-10\",\n  \"address\": {\n    \"countryCode\": \"NL\",\n    \"street\": \"Keizersgracht\",\n    \"houseNumber\": \"10\",\n    \"postalCode\": \"1015 CJ\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/register"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Authentication failures",
+      "item": [
+        {
+          "name": "Reject incorrect password",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(function () {}, 1100);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Incorrect password is unauthorized', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().detail).to.eql('Invalid username or password');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"wrong-password\"\n}"
+            },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Reject unknown username",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(function () {}, 1100);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unknown username is indistinguishable from a wrong password', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().detail).to.eql('Invalid username or password');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"unknown.{{$timestamp}}\",\n  \"password\": \"wrong-password\"\n}"
+            },
+            "url": "{{baseUrl}}/login"
+          }
+        },
+        {
+          "name": "Reject overview without bearer token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Missing authentication is unauthorized', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().title).to.eql('Authentication required');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/overview"
+          }
+        },
+        {
+          "name": "Reject overview with unknown bearer token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unknown token is unauthorized', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().title).to.eql('Authentication required');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer unknown-token"
+              }
+            ],
+            "url": "{{baseUrl}}/overview"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Database rate limit",
+      "description": "This request waits for a new limiter window, then sends five concurrent login lookups. At least one lookup must be rejected with HTTP 429.",
+      "item": [
+        {
+          "name": "Reject burst above two database requests per second",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "setTimeout(function () {}, 1100);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Trigger request itself is unauthenticated', function () {",
+                  "  pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "const statuses = [];",
+                  "const loginRequest = {",
+                  "  url: `${pm.collectionVariables.get('baseUrl')}/login`,",
+                  "  method: 'POST',",
+                  "  header: { 'Content-Type': 'application/json' },",
+                  "  body: {",
+                  "    mode: 'raw',",
+                  "    raw: JSON.stringify({ username: 'rate.limit.user', password: 'wrong-password' })",
+                  "  }",
+                  "};",
+                  "",
+                  "for (let attempt = 0; attempt < 5; attempt++) {",
+                  "  pm.sendRequest(loginRequest, function (error, response) {",
+                  "    pm.expect(error).to.eql(null);",
+                  "    statuses.push(response.code);",
+                  "",
+                  "    if (statuses.length === 5) {",
+                  "      pm.test('Burst contains rate-limited responses', function () {",
+                  "        pm.expect(statuses).to.include(429);",
+                  "        pm.expect(statuses.filter(status => status === 429).length).to.be.at.least(1);",
+                  "      });",
+                  "    }",
+                  "  });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/overview"
+          }
+        }
+      ]
+    }
+  ]
+}

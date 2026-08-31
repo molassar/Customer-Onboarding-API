@@ -1,0 +1,9 @@
+name: customer-onboarding
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"

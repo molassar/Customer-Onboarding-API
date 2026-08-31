@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: customer-onboarding
+
+onboarding:
+  database-rate-limit:
+    limit-for-period: 2
+    limit-refresh-period: 1s
+  login:
+    session-ttl: 1h
+    maximum-sessions: 10000
+  registration:
+    allowed-countries:
+      - NL
+      - BE

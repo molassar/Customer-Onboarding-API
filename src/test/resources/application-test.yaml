@@ -1,0 +1,3 @@
+onboarding:
+  database-rate-limit:
+    limit-for-period: 10000
